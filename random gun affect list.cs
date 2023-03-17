@@ -1,98 +1,88 @@
-using UnityEngine;
+public class Bullet : MonoBehaviour {
+public float speed = 10f;
+public float damage = 10f;
+public float knockback = 10f;
+public float explosionForce = 1000f;
+public float explosionRadius = 10f;
+public float stunDuration = 1f;
 
-public class Bullet : MonoBehaviour
-{
-    public float speed = 20f;
-    public float lifetime = 2f;
-    public float explosionForce = 1000f;
-    public float explosionRadius = 5f;
-    public float knockbackForce = 500f;
-    public float knockbackDuration = 1f;
-    public float damage = 10f;
-    public float burnDuration = 5f;
-    public float slowDuration = 5f;
-    public float slowAmount = 0.5f;
-    public float confusionDuration = 5f;
-    public float spinDuration = 5f;
-    public float spinForce = 500f;
 
-    public GameObject explosionEffect;
-    public GameObject impactEffect;
+private Rigidbody rb;
 
-    private Rigidbody rigidbody;
+void Start() {
+    rb = GetComponent<Rigidbody>();
+    rb.velocity = transform.forward * speed;
+}
 
-    void Start()
-    {
-        rigidbody = GetComponent<Rigidbody>();
-        Destroy(gameObject, lifetime);
-        rigidbody.AddForce(transform.forward * speed, ForceMode.Impulse);
+void OnCollisionEnter(Collision collision) {
+    // Apply damage to hit object
+    var health = collision.gameObject.GetComponent<Health>();
+    if (health != null) {
+        health.TakeDamage(damage);
+        // Decrease hit object's accuracy temporarily
+        var aim = collision.gameObject.GetComponent<Aim>();
+        if (aim != null) {
+            aim.DecreaseAccuracy(0.5f);
+        }
+        // Apply a poison effect that gradually decreases the hit object's health over time
+        StartCoroutine(ApplyPoisonEffect(5f, health));
     }
 
-    void OnCollisionEnter(Collision collision)
-    {
-        if (collision.gameObject.CompareTag("Player"))
-        {
-            // Apply damage to player
-            collision.gameObject.GetComponent<Health>().TakeDamage(damage);
-
-            // Apply knockback to player
-            collision.gameObject.GetComponent<Rigidbody>().AddForce(transform.forward * knockbackForce, ForceMode.Impulse);
-            StartCoroutine(ApplyNegativeEffect(collision.gameObject, knockbackDuration, "Knockback"));
-
-            // Apply burn to player
-            StartCoroutine(ApplyNegativeEffect(collision.gameObject, burnDuration, "Burn"));
-
-            // Apply slow to player
-            collision.gameObject.GetComponent<PlayerMovement>().speed *= slowAmount;
-            StartCoroutine(ApplyNegativeEffect(collision.gameObject, slowDuration, "Slow"));
-
-            // Apply confusion to player
-            StartCoroutine(ApplyNegativeEffect(collision.gameObject, confusionDuration, "Confusion"));
-
-            // Apply spin to player
-            collision.gameObject.GetComponent<Rigidbody>().AddTorque(transform.forward * spinForce, ForceMode.Impulse);
-            StartCoroutine(ApplyNegativeEffect(collision.gameObject, spinDuration, "Spin"));
-        }
-        else
-        {
-            // Apply explosion force to surrounding objects
-            Collider[] colliders = Physics.OverlapSphere(transform.position, explosionRadius);
-            foreach (Collider col in colliders)
-            {
-                Rigidbody rb = col.GetComponent<Rigidbody>();
-                if (rb != null)
-                {
-                    rb.AddExplosionForce(explosionForce, transform.position, explosionRadius, 1f, ForceMode.Impulse);
-                }
-            }
-
-            // Spawn explosion effect
-            Instantiate(explosionEffect, transform.position, transform.rotation);
-
-            // Spawn impact effect
-            Instantiate(impactEffect, transform.position, transform.rotation);
-        }
-
-        // Destroy bullet
-        Destroy(gameObject);
+    // Apply knockback to hit object
+    var hitRb = collision.gameObject.GetComponent<Rigidbody>();
+    if (hitRb != null) {
+        hitRb.AddForce(rb.velocity.normalized * knockback * 2f, ForceMode.Impulse);
     }
 
-    IEnumerator ApplyNegativeEffect(GameObject target, float duration, string effectName)
-    {
-        // Apply negative effect to target
-        target.GetComponent<PlayerMovement>().enabled = false;
-        target.GetComponent<Shooter>().enabled = false;
-        target.GetComponentInChildren<MeshRenderer>().enabled = false;
+    // Apply explosion force to nearby objects
+    Collider[] colliders = Physics.OverlapSphere(transform.position, explosionRadius);
+    foreach (Collider col in colliders) {
+        var rb = col.GetComponent<Rigidbody>();
+        if (rb != null) {
+            // Randomize explosion force and direction for more chaotic effects
+            rb.AddExplosionForce(explosionForce * Random.Range(0.5f, 1.5f), transform.position + Random.insideUnitSphere * 2f, explosionRadius * Random.Range(0.5f, 1.5f));
+        }
+    }
 
-        // Wait for duration of effect
-        yield return new WaitForSeconds(duration);
+    // Stun hit object
+    var enemy = collision.gameObject.GetComponent<Enemy>();
+    if (enemy != null) {
+        enemy.Stun(stunDuration * 2f);
+        // Apply a confusion effect that temporarily reverses hit object's movement and aim
+        StartCoroutine(ApplyConfusionEffect(3f, enemy));
+    }
 
-        // Remove negative effect from target
-        target.GetComponent<PlayerMovement>().enabled = true;
-        target.GetComponent<Shooter>().enabled = true;
-        target.GetComponentInChildren<MeshRenderer>().enabled = true;
+    // Apply a negative effect to the player that decreases their health and movement speed temporarily
+    var player = collision.gameObject.GetComponent<Player>();
+    if (player != null) {
+        player.TakeDamage(damage * 2f);
+        player.DecreaseMovementSpeed(0.5f);
+    }
 
-        // Show effect ended message
-        Debug.Log(target.name + " " + effectName + " ended.");
+    // Destroy bullet object
+    Destroy(gameObject);
+}
+
+IEnumerator ApplyPoisonEffect(float duration, Health health) {
+    float elapsed = 0f;
+    float tickInterval = 0.5f;
+    while (elapsed < duration) {
+        health.TakeDamage(damage * tickInterval / 2f);
+        yield return new WaitForSeconds(tickInterval);
+        elapsed += tickInterval;
     }
 }
+
+IEnumerator ApplyConfusionEffect(float duration, Enemy enemy) {
+    float elapsed = 0f;
+    while (elapsed < duration) {
+        enemy.ReverseMovementDirection();
+        enemy.ReverseAimDirection();
+        yield return new WaitForSeconds(0.5f);
+        elapsed += 0.5f;
+    }
+}
+
+}
+
+//Note that this modified script includes various negative effects that apply to the hit objects, including a poison effect that gradually decreases health over time, decreased accuracy, confusion that reverses movement and aim, and increased knockback. The //player also experiences negative effects including decreased health and movement speed. These changes should make the gameplay more chaotic and challenging.
