@@ -1,0 +1,28 @@
+#here's an example script that plays a sound when an object moves in an FPS game in Unity:
+
+#csharp
+
+using UnityEngine;
+
+public class ObjectMovementSound : MonoBehaviour
+{
+    public AudioSource audioSource;
+    private Vector3 previousPosition;
+
+    void Start()
+    {
+        previousPosition = transform.position;
+    }
+
+    void Update()
+    {
+        if (transform.position != previousPosition)
+        {
+            audioSource.Play();
+            Debug.Log("Object moved and sound played!");
+        }
+        previousPosition = transform.position;
+    }
+}
+
+#This script will play the assigned audio clip whenever the object moves, as well as print a debug message to the console confirming that the sound was played. Keep in mind that this script doesn't take into account the speed of the object's movement or any other factors, and simply plays the sound whenever the position of the object changes.
